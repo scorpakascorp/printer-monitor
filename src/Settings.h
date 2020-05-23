@@ -87,7 +87,7 @@ void displayPrinterStatus();
 void handleSystemReset();
 void handleWifiReset();
 void handleUpdateConfig();
-void handleUpdateWeather();
+//void handleUpdateWeather();
 void handleConfigure();
 void handleWeatherConfigure();
 void redirectHome();

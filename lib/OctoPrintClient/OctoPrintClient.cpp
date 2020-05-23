@@ -47,10 +47,10 @@ boolean OctoPrintClient::validate() {
   boolean rtnValue = false;
   printerData.error = "";
   if (String(myServer) == "") {
-    printerData.error += "Server address is required; ";
+    printerData.error += "Server address is required";
   }
   if (myApiKey == "") {
-    printerData.error += "ApiKey is required; ";
+    printerData.error += "ApiKey is required";
   }
   if (printerData.error == "") {
     rtnValue = true;
