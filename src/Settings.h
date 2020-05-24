@@ -97,7 +97,7 @@ void writeSettings();
 void checkDisplay();
 int getMinutesFromLastRefxxresh();
 void getUpdateTime();
-String getHeader(boolean refresh = false);
+String getHeader();
 String getFooter();
 int getMinutesFromLastRefresh();
 int getMinutesFromLastDisplay();

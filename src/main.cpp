@@ -70,69 +70,237 @@ int8_t getWifiQuality();
 ESP8266WebServer server(WEBSERVER_PORT);
 ESP8266HTTPUpdateServer serverUpdater;
 
-static const char WEB_ACTIONS[] PROGMEM   =  R"=====(
-  <a class='w3-bar-item w3-button' href='/'><i class='fa fa-home'></i> Home</a>
-  <a class='w3-bar-item w3-button' href='/configure'><i class='fa fa-cog'></i> Configure</a>
-  <a class='w3-bar-item w3-button' href='/systemreset' onclick='return confirm(\"Do you want to reset to default settings?\")'><i class='fa fa-undo'></i> Reset Settings</a>
-  <a class='w3-bar-item w3-button' href='/forgetwifi' onclick='return confirm(\"Do you want to forget to WiFi connection?\")'><i class='fa fa-wifi'></i> Forget WiFi</a>
-  <a class='w3-bar-item w3-button' href='/update'><i class='fa fa-wrench'></i> Firmware Update</a>
-  <a class='w3-bar-item w3-button' href='https://github.com/scorpakascorp/printer-monitor' target='_blank'><i class='fa fa-question-circle'></i> About</a>
+static const char PAGE_HEADER[] PROGMEM   =  R"=====(
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+      <link type="text/css" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"  media="screen,projection"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+      <meta charset='UTF-8'>
+      <style>
+        body {
+          display: flex;
+          min-height: 100vh;
+          flex-direction: column;
+        }
+        main {
+          flex: 1 0 auto;
+        }
+        .col.s12 > .btn {
+          width: 100%;
+        }
+      </style>
+    </head>
+
+    <body><main>
+      <nav class="teal lighten-2"> 
+        <a class="center brand-logo">Printer Monitor</a> 
+        <ul id="slide-out" class="sidenav">
+          <li><a href="/"><i class="material-icons">home</i>Home</a></li>
+          <li><a href="/configure"><i class="material-icons">settings</i>Configure</a></li>
+          <li><a href='/systemreset' onclick='return confirm("Do you want to reset to default settings?")'><i class="material-icons">replay</i>System reset</a></li>
+          <li><a href='/forgetwifi' onclick='return confirm("Do you want to reset to WiFi settings?")'><i class="material-icons">signal_wifi_off</i>Forget WiFi</a></li>
+          <li><a href='/update'><i class="material-icons">system_update</i>Firmware update</a></li>
+          <li><a href='https://github.com/scorpakascorp/printer-monitor'><i class="material-icons">help</i>About</a></li>
+        </ul>
+        <a href="#" data-target="slide-out" class="sidenav-trigger show-on-large"><i class="material-icons">menu</i></a>
+      </nav>
+)=====";
+
+static const char PAGE_FOOTER[] PROGMEM   =  R"=====(
+      </main>
+      <footer class='page-footer teal lighten-2'><div class='row'>
+          <div class='col s6 left-align'><i class='material-icons'>info</i> Version: %FIRMWARE_VERSION%</div>
+          <div class='col s6 right-align'><i class='material-icons'>wifi</i> Signal Strength: %SIGNAL_STRENGTH%%</div>
+        </div>
+      </footer>
+      <!--JavaScript at end of body for optimized loading-->
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+      <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function() {
+          var elems = document.querySelectorAll('.sidenav');
+          var instances = M.Sidenav.init(elems);
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+          var elems = document.querySelectorAll('select');
+          var instances = M.FormSelect.init(elems);
+        });
+
+      </script>
+    </body>
+  </html>
 )=====";
 
 static const char CHANGE_FORM[] PROGMEM  =  R"=====(
-  <form class='w3-container' action='/updateconfig' method='get'>
-  <h2>Station Config:</h2>
-  <p><label>OctoPrint API Key (get from your server)</label><input class='w3-input w3-border w3-margin-bottom' type='text' name='octoPrintApiKey' value='%OCTOKEY%' maxlength='60'></p>
-  <p><label>OctoPrint Host Name (usually octopi)</label><input class='w3-input w3-border w3-margin-bottom' type='text' name='octoPrintHostName' value='%OCTOHOST%' maxlength='60'></p>
-  <p><label>OctoPrint Address (do not include http://)</label><input class='w3-input w3-border w3-margin-bottom' type='text' name='octoPrintAddress' value='%OCTOADDRESS%' maxlength='60'></p>
-  <p><label>OctoPrint Port</label><input class='w3-input w3-border w3-margin-bottom' type='text' name='octoPrintPort' value='%OCTOPORT%' maxlength='5'  onkeypress='return isNumberKey(event)'></p>
-  <p><label>OctoPrint User (only needed if you have haproxy or basic auth turned on)</label><input class='w3-input w3-border w3-margin-bottom' type='text' name='octoUser' value='%OCTOUSER%' maxlength='30'></p>
-  <p><label>OctoPrint Password </label><input class='w3-input w3-border w3-margin-bottom' type='password' name='octoPass' value='%OCTOPASS%'></p>
-  <hr>
-  <p><input name='isClockEnabled' class='w3-check w3-margin-top' type='checkbox' %IS_CLOCK_CHECKED%> Display Clock when printer is off</p>
-  <p><input name='is24hour' class='w3-check w3-margin-top' type='checkbox' %IS_24HOUR_CHECKED%> Use 24 Hour Clock (military time)</p>
-  <p><input name='invDisp' class='w3-check w3-margin-top' type='checkbox' %IS_INVDISP_CHECKED%> Flip display orientation</p>
-  <p><input name='hasPSU' class='w3-check w3-margin-top' type='checkbox' %HAS_PSU_CHECKED%> Use OctoPrint PSU control plugin for clock/blank</p>
-  <p>Clock Sync / Weather Refresh (minutes) <select class='w3-option w3-padding' name='refresh'>%OPTIONS%</select></p>
-  <h2>Weather Config:</h2>
-  <p><input name='isWeatherEnabled' class='w3-check w3-margin-top' type='checkbox' %IS_WEATHER_CHECKED%> Display Weather when printer is off</p>
-  <label>OpenWeatherMap API Key (get from <a href='https://openweathermap.org/' target='_BLANK'>here</a>)</label>
-  <input class='w3-input w3-border w3-margin-bottom' type='text' name='openWeatherMapApiKey' value='%WEATHERKEY%' maxlength='60'>
-  <p><label>%CITYNAME1% (<a href='http://openweathermap.org/find' target='_BLANK'><i class='fa fa-search'></i> Search for City ID</a>) 
-    or full <a href='http://openweathermap.org/help/city_list.txt' target='_BLANK'>city list</a></label>
-    <input class='w3-input w3-border w3-margin-bottom' type='text' name='city1' value='%CITY1%' onkeypress='return isNumberKey(event)'>
-  </p>
-  <p><input name='metric' class='w3-check w3-margin-top' type='checkbox' %METRIC%> Use Metric (Celsius)</p>
-  <p>Weather Language <select class='w3-option w3-padding' name='language'>%LANGUAGEOPTIONS%</select></p>
+      <div class='container'>
+        <form action='/updateconfig' method='get'>
+          <h5>Station Config:</h5>
+          <div class="input-field col s12">
+            <input id="octoPrintApiKey" type="text" class="validate"  name='octoPrintApiKey' value='%OCTOKEY%' maxlength='60'>
+            <label for="octoPrintApiKey">OctoPrint API Key (get from your server)</label>
+          </div>
+          <div class="input-field col s12">
+            <input id="octoPrintHostName" type="text" class="validate"  name='octoPrintHostName' value='%OCTOHOST%' maxlength='60'>
+            <label for="octoPrintHostName">OctoPrint Host Name (usually octopi)</label>
+          </div>
+          <div class="input-field col s12">
+            <input id="octoPrintAddress" type="text" class="validate"  name='octoPrintAddress' value='%OCTOADDRESS%' maxlength='60'>
+            <label for="octoPrintAddress">OctoPrint Address (do not include http://)</label>
+          </div>
+          <div class="input-field col s12">
+            <input id="octoPrintPort" type="text" class="validate"  name='octoPrintPort' value='%OCTOPORT%' maxlength='5' onkeypress='return isNumberKey(event)'>
+            <label for="octoPrintPort">OctoPrint Port</label>
+          </div>
+          <div class="input-field col s12">
+            <input id="octoUser" type="text" class="validate"  name='octoUser' value='%OCTOUSER%' maxlength='30'>
+            <label for="octoUser">OctoPrint User (only needed if you have haproxy or basic auth turned on)</label>
+          </div>
+          <div class="input-field col s12">
+            <input id="octoPass" type="password" class="validate"  name='octoPass' value='%OCTOPASS%' maxlength='60'>
+            <label for="octoPass">OctoPrint Password</label>
+          </div>
+          <p>
+            <label>
+              <input name='isClockEnabled' class='filled-in' type='checkbox' %IS_CLOCK_CHECKED%>
+              <span>Display Clock when printer is off</span>
+            </label>
+          </p>
+          <p>
+            <label>
+              <input name='is24hour' class='filled-in' type='checkbox' %IS_24HOUR_CHECKED%>
+              <span>Use 24 Hour Clock</span>
+            </label>
+          </p>
+          <p>
+            <label>
+              <input name='invDisp' class='filled-in' type='checkbox' %IS_INVDISP_CHECKED%>
+              <span>Flip display orientation</span>
+            </label>
+          </p>
+          <p>
+            <label>
+              <input name='hasPSU' class='filled-in' type='checkbox' %HAS_PSU_CHECKED%> 
+              <span>Use OctoPrint PSU control plugin for clock/blank</span>
+            </label>
+          </p>
+          <p>
+            <div class='input-field'>
+              <select name='refresh'>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="60">60</option>
+              </select>
+              <label>Clock Sync / Weather Refresh (minutes)</label>
+            </div>
+          </p>
+          <h5>Weather Config:</h5>
+          <p>
+            <label>
+              <input name='isWeatherEnabled' class='filled-in' type='checkbox' %IS_WEATHER_CHECKED%>
+              <span>Display Weather when printer is off</span>
+            </label>
+          </p>
+
+          <div class="input-field col s12">
+            <input id='openWeatherMapApiKey' type='text' class="validate"  name='openWeatherMapApiKey' value='%WEATHERKEY%' maxlength='60'>
+            <label for='openWeatherMapApiKey'>OpenWeatherMap API Key (get from <a href='https://openweathermap.org/' target='_BLANK'>here</a>)</label>
+          </div>
+          <div class="input-field col s12">
+            <input id="city1" type="text" class="validate"  name='city1' value='%CITY1%' maxlength='60'>
+            <label for="city1">%CITYNAME1% (<a href='http://openweathermap.org/find' target='_BLANK'><i class="material-icons">search</i> Search for City ID</a>) 
+              or full <a href='http://openweathermap.org/help/city_list.txt' target='_BLANK'>city list</a></label>
+          </div>
+          <p>
+            <label>
+              <input name='metric' class='filled-in' type='checkbox' %METRIC%>
+              <span>Use Metric (Celsius)</span>
+            </label>
+          </p>
+
+          <p>
+            <div class='input-field'>
+              <select name='language'>
+                <option value='af'>Afrikaans</option>
+                <option value='al'>Albanian</option>
+                <option value='ar'>Arabic</option>
+                <option value='az'>Azerbaijani</option>
+                <option value='bg'>Bulgarian</option>
+                <option value='ca'>Catalan</option>
+                <option value='cz'>Czech</option>
+                <option value='da'>Danish</option>
+                <option value='de'>German</option>
+                <option value='el'>Greek</option>
+                <option value='en'>English</option>
+                <option value='eu'>Basque</option>
+                <option value='fa'>Persian (Farsi)</option>
+                <option value='fi'>Finnish</option>
+                <option value='fr'>French</option>
+                <option value='gl'>Galician</option>
+                <option value='he'>Hebrew</option>
+                <option value='hi'>Hindi</option>
+                <option value='hr'>Croatian</option>
+                <option value='hu'>Hungarian</option>
+                <option value='id'>Indonesian</option>
+                <option value='it'>Italian</option>
+                <option value='ja'>Japanese</option>
+                <option value='kr'>Korean</option>
+                <option value='la'>Latvian</option>
+                <option value='lt'>Lithuanian</option>
+                <option value='mk'>Macedonian</option>
+                <option value='no'>Norwegian</option>
+                <option value='nl'>Dutch</option>
+                <option value='pl'>Polish</option>
+                <option value='pt'>Portuguese</option>
+                <option value='pt_br'>Português Brasil</option>
+                <option value='ro'>Romanian</option>
+                <option value='ru'>Russian</option>
+                <option value='sv'>Swedish</option>
+                <option value='sk'>Slovak</option>
+                <option value='sl'>Slovenian</option>
+                <option value='sp'>Spanish</option>
+                <option value='sr'>Serbian</option>
+                <option value='th'>Thai</option>
+                <option value='tr'>Turkish</option>
+                <option value='ua'>Ukrainian</option>
+                <option value='vi'>Vietnamese</option>
+                <option value='zh_cn'>Chinese Simplified</option>
+                <option value='zh_tw'>Chinese Traditional</option>
+                <option value='zu'>Zulu</option>                
+              </select>
+              <label>Weather Language</label>
+            </div>
+          </p>
+
+          <div class="input-field col s12">
+            <input id="utcoffset" type="text" class="validate"  name='utcoffset' value='%UTCOFFSET%' maxlength='30'>
+            <label for="utcoffset">UTC Time Offset</label>
+          </div>
+
+          <h5>Auth Config:</h5>
+          <p>
+            <label>
+              <input name='isBasicAuth' class='filled-in' type='checkbox' %IS_BASICAUTH_CHECKED%>
+              <span>Use Security Credentials for Configuration Changes</span>
+            </label>
+          </p>
+          <div class="input-field col s12">
+            <input id="userid" type="text" class="validate"  name='userid' value='%USERID%' maxlength='30'>
+            <label for="userid">User ID (for this interface)</label>
+          </div>
+          <div class="input-field col s12">
+            <input id="stationpassword" type="password" class="validate"  name='stationpassword' value='%STATIONPASSWORD%' maxlength='30'>
+            <label for="stationpassword">Password</label>
+          </div>
+
+          <div class="center-align col s12">
+            <button class="btn waves-effect waves-light" type="submit" name="action">Save</button>
+          </div>
+        </form>
+      </div>
+
 )=====";       
-
-static const char THEME_FORM[] PROGMEM  = R"=====(
-  <h2>Theme Config:</h2>  
-  <p>Theme Color <select class='w3-option w3-padding' name='theme'>%THEME_OPTIONS%</select></p>
-  <p><label>UTC Time Offset</label><input class='w3-input w3-border w3-margin-bottom' type='text' name='utcoffset' value='%UTCOFFSET%' maxlength='12'></p>
-  <h2>Auth Config:</h2>  
-  <p><input name='isBasicAuth' class='w3-check w3-margin-top' type='checkbox' %IS_BASICAUTH_CHECKED%> Use Security Credentials for Configuration Changes</p>
-  <p><label>User ID (for this interface)</label><input class='w3-input w3-border w3-margin-bottom' type='text' name='userid' value='%USERID%' maxlength='20'></p>
-  <p><label>Password </label><input class='w3-input w3-border w3-margin-bottom' type='password' name='stationpassword' value='%STATIONPASSWORD%'></p>
-  <button class='w3-button w3-block w3-grey w3-section w3-padding' type='submit'>Save</button></form>
-)=====";   
-
-// static const char WEATHER_FORM[] PROGMEM  = R"=====(
-//   <form class='w3-container' action='/updateweatherconfig' method='get'>
-//     <h2>Weather Config:</h2>
-//     <p><input name='isWeatherEnabled' class='w3-check w3-margin-top' type='checkbox' %IS_WEATHER_CHECKED%> Display Weather when printer is off</p>
-//     <label>OpenWeatherMap API Key (get from <a href='https://openweathermap.org/' target='_BLANK'>here</a>)</label>
-//     <input class='w3-input w3-border w3-margin-bottom' type='text' name='openWeatherMapApiKey' value='%WEATHERKEY%' maxlength='60'>
-//     <p><label>%CITYNAME1% (<a href='http://openweathermap.org/find' target='_BLANK'><i class='fa fa-search'></i> Search for City ID</a>) 
-//         or full <a href='http://openweathermap.org/help/city_list.txt' target='_BLANK'>city list</a></label>
-//         <input class='w3-input w3-border w3-margin-bottom' type='text' name='city1' value='%CITY1%' onkeypress='return isNumberKey(event)'>
-//     </p>
-//     <p><input name='metric' class='w3-check w3-margin-top' type='checkbox' %METRIC%> Use Metric (Celsius)</p>
-//     <p>Weather Language <select class='w3-option w3-padding' name='language'>%LANGUAGEOPTIONS%</select></p>
-//     <button class='w3-button w3-block w3-grey w3-section w3-padding' type='submit'>Save</button>
-//   </form>
-//   <script>function isNumberKey(e){var h=e.which?e.which:event.keyCode;return!(h>31&&(h<48||h>57))}</script>
-// )=====";
 
 static const char LANG_OPTIONS[] PROGMEM  = 
                       "<option>ar</option>"
@@ -168,32 +336,6 @@ static const char LANG_OPTIONS[] PROGMEM  =
                       "<option>vi</option>"
                       "<option>zh_cn</option>"
                       "<option>zh_tw</option>";
-
-static const char COLOR_THEMES[] PROGMEM  = 
-                      "<option>red</option>"
-                      "<option>pink</option>"
-                      "<option>purple</option>"
-                      "<option>deep-purple</option>"
-                      "<option>indigo</option>"
-                      "<option>blue</option>"
-                      "<option>light-blue</option>"
-                      "<option>cyan</option>"
-                      "<option>teal</option>"
-                      "<option>green</option>"
-                      "<option>light-green</option>"
-                      "<option>lime</option>"
-                      "<option>khaki</option>"
-                      "<option>yellow</option>"
-                      "<option>amber</option>"
-                      "<option>orange</option>"
-                      "<option>deep-orange</option>"
-                      "<option>blue-grey</option>"
-                      "<option>brown</option>"
-                      "<option>grey</option>"
-                      "<option>dark-grey</option>"
-                      "<option>black</option>"
-                      "<option>w3schools</option>";
-                            
 
 void setup() {
   Serial.begin(115200);
@@ -259,11 +401,6 @@ void setup() {
     display.flipScreenVertically();  //connections at top of OLED display
   }
   
-  // print the received signal strength:
-  Serial.print("Signal Strength (RSSI): ");
-  Serial.print(getWifiQuality());
-  Serial.println("%");
-
   if (ENABLE_OTA) {
     ArduinoOTA.onStart([]() {
       Serial.println("Start");
@@ -506,48 +643,6 @@ void handleWifiReset() {
   ESP.restart();
 }
 
-// void handleWeatherConfigure() {
-//   if (!authentication()) {
-//     return server.requestAuthentication();
-//   }
-//   digitalWrite(externalLight, LOW);
-//   String html = "";
-
-//   server.sendHeader("Cache-Control", "no-cache, no-store");
-//   server.sendHeader("Pragma", "no-cache");
-//   server.sendHeader("Expires", "-1");
-//   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-//   server.send(200, "text/html", "");
-
-//   html = getHeader();
-//   server.sendContent(html);
-  
-//   String form = FPSTR(WEATHER_FORM);
-//   String isWeatherChecked = "";
-//   if (DISPLAYWEATHER) {
-//     isWeatherChecked = "checked='checked'";
-//   }
-//   form.replace("%IS_WEATHER_CHECKED%", isWeatherChecked);
-//   form.replace("%WEATHERKEY%", WeatherApiKey);
-//   form.replace("%CITYNAME1%", weatherClient.getCity(0));
-//   form.replace("%CITY1%", String(CityIDs[0]));
-//   String checked = "";
-//   if (IS_METRIC) {
-//     checked = "checked='checked'";
-//   }
-//   form.replace("%METRIC%", checked);
-//   String options = FPSTR(LANG_OPTIONS);
-//   options.replace(">"+String(WeatherLanguage)+"<", " selected>"+String(WeatherLanguage)+"<");
-//   form.replace("%LANGUAGEOPTIONS%", options);
-//   server.sendContent(form);
-  
-//   html = getFooter();
-//   server.sendContent(html);
-//   server.sendContent("");
-//   server.client().stop();
-//   digitalWrite(externalLight, HIGH);
-// }
-
 void handleConfigure() {
   if (!authentication()) {
     return server.requestAuthentication();
@@ -594,6 +689,7 @@ void handleConfigure() {
   form.replace("%HAS_PSU_CHECKED%", hasPSUchecked);
   
   String options = "<option>10</option><option>15</option><option>20</option><option>30</option><option>60</option>";
+  //TODO: make 'selected' work again
   options.replace(">"+String(minutesBetweenDataRefresh)+"<", " selected>"+String(minutesBetweenDataRefresh)+"<");
   form.replace("%OPTIONS%", options);
 
@@ -611,18 +707,11 @@ void handleConfigure() {
   }
   form.replace("%METRIC%", checked);
   String weather_lang_options = FPSTR(LANG_OPTIONS);
+
+  //TODO: make 'selected' work again
   weather_lang_options.replace(">"+String(WeatherLanguage)+"<", " selected>"+String(WeatherLanguage)+"<");
   form.replace("%LANGUAGEOPTIONS%", weather_lang_options);
-
-
-
-  server.sendContent(form);
-
-  form = FPSTR(THEME_FORM);
   
-  String themeOptions = FPSTR(COLOR_THEMES);
-  themeOptions.replace(">"+String(themeColor)+"<", " selected>"+String(themeColor)+"<");
-  form.replace("%THEME_OPTIONS%", themeOptions);
   form.replace("%UTCOFFSET%", String(UtcOffset));
   String isUseSecurityChecked = "";
   if (IS_BASIC_AUTH) {
@@ -670,51 +759,18 @@ void redirectHome() {
   server.client().stop();
 }
 
-String getHeader(boolean refresh) {
-  String menu = FPSTR(WEB_ACTIONS);
-
-  String html = "<!DOCTYPE HTML>";
-  html += "<html><head><title>Printer Monitor</title><link rel='icon' href='data:;base64,='>";
-  html += "<meta charset='UTF-8'>";
-  html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
-  if (refresh) {
-    html += "<meta http-equiv=\"refresh\" content=\"30\">";
-  }
-  html += "<link rel='stylesheet' href='https://www.w3schools.com/w3css/4/w3.css'>";
-  html += "<link rel='stylesheet' href='https://www.w3schools.com/lib/w3-theme-" + themeColor + ".css'>";
-  html += "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>";
-  html += "</head><body>";
-  html += "<nav class='w3-sidebar w3-bar-block w3-card' style='margin-top:88px' id='mySidebar'>";
-  html += "<div class='w3-container w3-theme-d2'>";
-  html += "<span onclick='closeSidebar()' class='w3-button w3-display-topright w3-large'><i class='fa fa-times'></i></span>";
-  html += "<div class='w3-cell w3-left w3-xxxlarge' style='width:60px'><i class='fa fa-cube'></i></div>";
-  html += "<div class='w3-padding'>Menu</div></div>";
-  html += menu;
-  html += "</nav>";
-  html += "<header class='w3-top w3-bar w3-theme'><button class='w3-bar-item w3-button w3-xxxlarge w3-hover-theme' onclick='openSidebar()'><i class='fa fa-bars'></i></button><h2 class='w3-bar-item'>Printer Monitor</h2></header>";
-  html += "<script>";
-  html += "function openSidebar(){document.getElementById('mySidebar').style.display='block'}function closeSidebar(){document.getElementById('mySidebar').style.display='none'}closeSidebar();";
-  html += "</script>";
-  html += "<br><div class='w3-container w3-large' style='margin-top:88px'>";
-  return html;
+String getHeader() {
+  return FPSTR(PAGE_HEADER);
 }
 
 String getFooter() {
   int8_t rssi = getWifiQuality();
-  Serial.print("Signal Strength (RSSI): ");
-  Serial.print(rssi);
-  Serial.println("%");
-  String html = "<br><br><br>";
-  html += "</div>";
-  html += "<footer class='w3-container w3-bottom w3-theme w3-margin-top'>";
-  if (lastReportStatus != "") {
-    html += "<i class='fa fa-external-link'></i> Report Status: " + lastReportStatus + "<br>";
-  }
-  html += "<i class='fa fa-paper-plane-o'></i> Version: " + String(VERSION) + "<br>";
-  html += "<i class='fa fa-rss'></i> Signal Strength: ";
-  html += String(rssi) + "%";
-  html += "</footer>";
-  html += "</body></html>";
+  Serial.printf("Signal Strength (RSSI): %u%% \r\n ", rssi);
+
+  String html = FPSTR(PAGE_FOOTER);
+  html.replace("%FIRMWARE_VERSION%", String(VERSION));
+  html.replace("%SIGNAL_STRENGTH%", String(rssi));
+
   return html;
 }
 
@@ -727,14 +783,14 @@ void displayPrinterStatus() {
   server.sendHeader("Expires", "-1");
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html", "");
-  server.sendContent(String(getHeader(true)));
+  server.sendContent(String(getHeader()));
 
   String displayTime = timeClient.getAmPmHours() + ":" + timeClient.getMinutes() + ":" + timeClient.getSeconds() + " " + timeClient.getAmPm();
   if (IS_24HOUR) {
     displayTime = timeClient.getHours() + ":" + timeClient.getMinutes() + ":" + timeClient.getSeconds();
   }
   
-  html += "<div class='w3-cell-row' style='width:100%'><h2>Time: " + displayTime + "</h2></div><div class='w3-cell-row'>";
+  html += "<div class='w3-cell-row' style='width:100%'><h5>Time: " + displayTime + "</h5></div><div class='w3-cell-row'>";
   html += "<div class='w3-cell w3-container' style='width:100%'><p>";
   html += "Host Name: " + OctoPrintHostName + "<br>";
   if (printerClient.getError() != "") {
@@ -790,12 +846,12 @@ void displayPrinterStatus() {
 
   if (DISPLAYWEATHER) {
     if (weatherClient.getCity(0) == "") {
-      html += "<p>Please <a href='/configureweather'>Configure Weather</a> API</p>";
+      html += "<p>Please <a href='/configure'>Configure Weather API</a></p>";
       if (weatherClient.getError() != "") {
         html += "<p>Weather Error: <strong>" + weatherClient.getError() + "</strong></p>";
       }
     } else {
-      html += "<div class='w3-cell-row' style='width:100%'><h2>" + weatherClient.getCity(0) + ", " + weatherClient.getCountry(0) + "</h2></div><div class='w3-cell-row'>";
+      html += "<div class='w3-cell-row' style='width:100%'><h5>" + weatherClient.getCity(0) + ", " + weatherClient.getCountry(0) + "</h5></div><div class='w3-cell-row'>";
       html += "<div class='w3-cell w3-left w3-medium' style='width:120px'>";
       html += "<img src='http://openweathermap.org/img/w/" + weatherClient.getIcon(0) + ".png' alt='" + weatherClient.getDescription(0) + "'><br>";
       html += weatherClient.getHumidity(0) + "% Humidity<br>";
